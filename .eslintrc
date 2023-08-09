@@ -1,0 +1,22 @@
+{
+  "extends": [
+    "@jaybeeuu/eslint-config/base",
+    "plugin:react/recommended"
+  ],
+  "env": {
+    "browser": true
+  },
+  "plugins": [
+    "react"
+  ],
+  "settings": {
+    "import/resolver": {
+      "webpack": {
+        "config": "./webpack.config.js"
+      }
+    }
+  },
+  "rules": {
+    "react/prop-types": "off"
+  }
+}

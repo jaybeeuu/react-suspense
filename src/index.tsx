@@ -1,17 +1,20 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import App from './App';
-import './index.css';
+import { assertIsNotNullish } from "@jaybeeuu/utilities";
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { App } from "./App";
+import "./index.css";
 
-ReactDOM.render(
+const container = document.getElementById("root");
+assertIsNotNullish(container);
+
+const root = createRoot(container);
+root.render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>,
-  document.getElementById('root'),
+  </React.StrictMode>
 );
 
-// Hot Module Replacement (HMR) - Remove this snippet to remove HMR.
-// Learn more: https://snowpack.dev/concepts/hot-module-replacement
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 if (import.meta.hot) {
   import.meta.hot.accept();
 }
