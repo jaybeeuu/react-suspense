@@ -1,25 +1,38 @@
-# New Project
+# React Suspense and Transitions
 
-> ✨ Bootstrapped with Create Snowpack App (CSA).
+This is an experimental repo which i used to explore some unfamiliar (to me) features of react - transitions and suspense.
 
-## Available Scripts
+I had two questions i wanted to answer:
 
-### npm start
+1. How does suspense work?
+2. What does the new transition API do?
 
-Runs the app in the development mode.
-Open http://localhost:8080 to view it in the browser.
+The app is a simple page that let's you load an image from your local machine. It displays the image in a canvas,
+and uses one of the pre-trained TensorflowJS models
+([mobilenet](https://github.com/tensorflow/tfjs-models/tree/master/mobilenet))
+to classify the image in your browser.
 
-The page will reload if you make edits.
-You will also see any lint errors in the console.
+Loading and classifying the image are both asynchronous operations, classifications uses the output of te image load and so can't start until image load is complete.
 
-### npm run build
+![demo](./react-suspense.gif)
 
-Builds a static copy of your site to the `build/` folder.
-Your app is ready to be deployed!
+## Run it yourself
 
-**For the best production performance:** Add a build bundler plugin like "@snowpack/plugin-webpack" to your `snowpack.config.mjs` config file.
+This repo uses pnpm ot manage it's dependencies, and Vite to build the app.
 
-### npm test
+Once you have it locally run@
 
-Launches the application test runner.
-Run with the `--watch` flag (`npm test -- --watch`) to run in interactive watch mode.
+```sh
+pnpm install
+pnpm start
+```
+
+Vite will tell you where it's running the app - by default it should be [http://localhost:5173](http://localhost:5173).
+
+I use TypeScript and CSS modules for the styling, so if you want to make changes to the classes then, in a new shell, run
+
+```sh
+pnpm css-modules -w
+```
+
+That sets up a watch in `typed-css-codules` and keep the type definitions up to date.
