@@ -1,8 +1,13 @@
 {
   "extends": [
     "@jaybeeuu/eslint-config/base",
-    "plugin:react/recommended"
+    "plugin:react/recommended",
+    "plugin:react/jsx-runtime"
   ],
+
+  "parserOptions": {
+    "project": ["./tsconfig.json"]
+  },
   "env": {
     "browser": true
   },

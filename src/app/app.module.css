@@ -1,0 +1,12 @@
+.header {
+  display: flex;
+  justify-content: center;
+}
+
+.main {
+  padding: 0.5em;
+}
+
+.main > *:not(:first-child) {
+  margin-top: 0.5em;
+}
