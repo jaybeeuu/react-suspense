@@ -1,6 +1,7 @@
 import { useState, useTransition } from "react";
-import { ImageView } from "../image-view";
 import styles from "./app.module.css";
+import { ImageLoader } from "../image-loader/image-loader";
+import { LoadingSpinner } from "../loading-spinner";
 
 export const App = (): JSX.Element => {
   const [file, setFile] = useState<File | null>();
@@ -8,11 +9,13 @@ export const App = (): JSX.Element => {
   return (
     <>
       <header className={styles.header}>
-        <h1>React Suspense with RXJS</h1>
+        <h1>React Suspense</h1>
       </header>
+
       <main className={styles.main}>
         <label>
-          Choose an image to categorise:
+          Choose an image to classify:
+          {isPending ? <LoadingSpinner size={"small"} /> : null}
           <input
             disabled={isPending}
             type="file"
@@ -23,7 +26,9 @@ export const App = (): JSX.Element => {
             placeholder="Choose an image to process"
           />
         </label>
-        {file ? <ImageView file={file} /> : null}
+        {file ? (
+          <ImageLoader file={file} />
+        ) : null}
       </main>
     </>
   );

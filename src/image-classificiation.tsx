@@ -1,24 +1,15 @@
-import type { PromiseState} from "@jaybeeuu/utilities";
-import { getErrorMessage } from "@jaybeeuu/utilities";
 import type { ImageClassification } from "./image-service";
-import { LoadingSpinner } from "./loading-spinner";
 
 export interface ImageClassificationsProps {
-  classifications: PromiseState<ImageClassification[]>;
+  getClassifications: () => ImageClassification[];
 }
 
-export const ImageClassifications = ({ classifications }: ImageClassificationsProps): JSX.Element => {
-  if (classifications.status === "pending") {
-    return <LoadingSpinner />;
-  }
-
-  if (classifications.status === "failed") {
-    return <div>{getErrorMessage(classifications.error)}</div>;
-  }
+export const ImageClassifications = ({ getClassifications }: ImageClassificationsProps): JSX.Element => {
+  const classifications = getClassifications();
 
   return (
     <ul>
-      {classifications.value.map((category) => (
+      {classifications.map((category) => (
         <li key={category.className}>{category.className} ({Math.round(category.probability * 100)}%)</li>
       ))}
     </ul>

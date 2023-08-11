@@ -14,6 +14,7 @@ export const loadImage = (file: File): Promise<HTMLImageElement> => {
       resolve(image);
     };
     image.onerror = onError;
+    image.alt = file.name;
 
     const fileReader = new FileReader();
 
