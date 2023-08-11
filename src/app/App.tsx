@@ -1,10 +1,10 @@
-import { Suspense, useState } from "react";
-import { LoadingSpinner } from "../loading-spinner";
+import { useState, useTransition } from "react";
 import { ImageView } from "../image-view";
 import styles from "./app.module.css";
 
 export const App = (): JSX.Element => {
   const [file, setFile] = useState<File | null>();
+  const [isPending, startTransition] = useTransition();
   return (
     <>
       <header className={styles.header}>
@@ -14,8 +14,11 @@ export const App = (): JSX.Element => {
         <label>
           Choose an image to categorise:
           <input
+            disabled={isPending}
             type="file"
-            onChange={(e) => setFile(e.currentTarget.files?.item(0))}
+            onChange={(e) => {
+              startTransition(() => setFile(e.currentTarget.files?.item(0)));
+            }}
             accept="image/*"
             placeholder="Choose an image to process"
           />
