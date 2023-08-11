@@ -1,16 +1,17 @@
 import type { ImageClassification } from "./image-service";
+import { usePromise } from "./use-promise";
 
 export interface ImageClassificationsProps {
-  getClassifications: () => ImageClassification[];
+  imageClassifications: Promise<ImageClassification[]>;
 }
 
-export const ImageClassifications = ({ getClassifications }: ImageClassificationsProps): JSX.Element => {
-  const classifications = getClassifications();
+export const ImageClassifications = ({ imageClassifications }: ImageClassificationsProps): JSX.Element => {
+  const resolvedClassifications = usePromise(imageClassifications);
 
   return (
     <ul>
-      {classifications.map((category) => (
-        <li key={category.className}>{category.className} ({Math.round(category.probability * 100)}%)</li>
+      {resolvedClassifications.map((classification) => (
+        <li key={classification.className}>{classification.className} ({Math.round(classification.probability * 100)}%)</li>
       ))}
     </ul>
   );

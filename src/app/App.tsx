@@ -1,7 +1,7 @@
 import { useState, useTransition } from "react";
-import styles from "./app.module.css";
 import { ImageLoader } from "../image-loader/image-loader";
 import { LoadingSpinner } from "../loading-spinner";
+import styles from "./app.module.css";
 
 export const App = (): JSX.Element => {
   const [file, setFile] = useState<File | null>();
@@ -15,7 +15,6 @@ export const App = (): JSX.Element => {
       <main className={styles.main}>
         <label>
           Choose an image to classify:
-          {isPending ? <LoadingSpinner size={"small"} /> : null}
           <input
             disabled={isPending}
             type="file"
@@ -23,8 +22,8 @@ export const App = (): JSX.Element => {
               startTransition(() => setFile(e.currentTarget.files?.item(0)));
             }}
             accept="image/*"
-            placeholder="Choose an image to process"
           />
+          {isPending ? <LoadingSpinner size={"small"} /> : null}
         </label>
         {file ? (
           <ImageLoader file={file} />

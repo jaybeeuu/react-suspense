@@ -1,25 +1,7 @@
-import { asError, assertIsNotNullish } from "@jaybeeuu/utilities";
-import type { DependencyList } from "react";
-import { useMemo, useRef } from "react";
+import type { DependencyList} from "react";
+import { useRef } from "react";
 
 const noValue = Symbol.for("no-value");
-
-export const useSynchronousEffect = (effect: (() => void) | (() => () => void), dependencies: DependencyList): void => {
-  const previousDependenciesRef = useRef<DependencyList | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
-  const previousDestructorRef = useRef<void | (() => void)>();
-  const previousDependencies = previousDependenciesRef.current;
-
-  if (previousDependencies === null
-    || previousDependencies.length !== dependencies.length
-    || previousDependencies.some((value, index) => !Object.is(value, dependencies[index]))
-  ) {
-    previousDestructorRef.current?.();
-    const destructor = effect();
-    previousDestructorRef.current = destructor;
-    previousDependenciesRef.current = dependencies;
-  }
-};
 
 export const useSemanticMemo = <Value>(factory: () => Value, dependencies: DependencyList): Value => {
   const previousValueRef = useRef<Value | typeof noValue>(noValue);
@@ -42,51 +24,48 @@ export interface PromisedValueGetter<Value> {
   promise: Promise<Value>;
 }
 
-export const usePromise = <Value>(promiseFactory: () => Promise<Value>, dependencies: DependencyList): PromisedValueGetter<Value> => {
-  const errorRef = useRef<Error | typeof noValue>(noValue);
-  const valueRef = useRef<Value | typeof noValue>(noValue);
+export interface PendingPromise<Value> extends PromiseLike<Value> {
+  status: "pending";
+}
 
-  const promise = useSemanticMemo(promiseFactory, dependencies);
+export interface FulfilledPromise<Value> extends PromiseLike<Value> {
+  status: "fulfilled";
+  value: Value;
+}
 
-  useSynchronousEffect(() => {
-    errorRef.current = noValue;
-    valueRef.current = noValue;
-    const isCurrent = { current: true };
+export interface RejectedPromise<Value> extends PromiseLike<Value> {
+  status: "rejected";
+  error: unknown;
+}
 
-    void (async () => {
-      try {
-        const value = await promise;
-        if (isCurrent.current) {
-          valueRef.current = value;
-        }
-      } catch (error) {
-        if (isCurrent.current) {
-          errorRef.current = asError(error);
-        }
-      }
-    })();
+export type ObservedPromise<Value> = PendingPromise<Value> | FulfilledPromise<Value> | RejectedPromise<Value>;
 
-    return () => { isCurrent.current = false; };
-  }, [promise]);
+const isObservedPromise = <Value>(promise: PromiseLike<Value>): promise is ObservedPromise<Value> => {
+  return "status" in promise;
+};
 
-  return useMemo((): PromisedValueGetter<Value> => {
-    const valueGetter = (): Value => {
-      if (errorRef.current !== noValue) {
-        throw errorRef.current;
-      }
+const observePromise = <Value>(promise: PromiseLike<Value>): ObservedPromise<Value> => {
+  const observedPromise: ObservedPromise<Value> = Object.assign(promise, { status: "pending" as  const });
 
-      assertIsNotNullish(promise);
+  void (async () => {
+    try {
+      const value = await promise;
+      void Object.assign(observedPromise, { status: "fulfilled" as const, value });
+    } catch (error) {
+      void Object.assign(observedPromise, { status: "rejected" as const, error });
+    }
+  })();
 
-      if (valueRef.current === noValue) {
-        // eslint-disable-next-line @typescript-eslint/no-throw-literal
-        throw promise;
-      }
+  return observedPromise;
+};
 
-      return valueRef.current;
-    };
+export const usePromise = <Value>(promise: Promise<Value>): Value => {
+  const observedPromise = isObservedPromise(promise) ? promise : observePromise(promise);
 
-    valueGetter.promise = promise;
-
-    return valueGetter;
-  }, [promise]);
+  switch (observedPromise.status) {
+    // eslint-disable-next-line @typescript-eslint/no-throw-literal
+    case "pending": throw observedPromise;
+    case "fulfilled": return observedPromise.value;
+    case "rejected": throw observedPromise.error;
+  }
 };

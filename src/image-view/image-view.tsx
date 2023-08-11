@@ -4,29 +4,30 @@ import { ImageClassifications } from "../image-classificiation";
 import type { ImageClassification } from "../image-service";
 import { LoadingSpinner } from "../loading-spinner";
 import styles from "./image-view.module.css";
+import { usePromise } from "../use-promise";
 
 export interface ImageViewProps {
-  getImage: () => HTMLImageElement;
-  getImageClassifications: () => ImageClassification[];
+  image: Promise<HTMLImageElement>;
+  imageClassifications: Promise<ImageClassification[]>;
 }
 
-export const ImageView = ({ getImage, getImageClassifications }: ImageViewProps): JSX.Element => {
+export const ImageView = ({ image, imageClassifications }: ImageViewProps): JSX.Element => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const image = getImage();
+  const loadedImage = usePromise(image);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
     assertIsNotNullish(canvas);
-    canvas.width = image.width;
-    canvas.height = image.height;
-    canvas.getContext("2d")?.drawImage(image, 0, 0);
-  }, [image]);
+    canvas.width = loadedImage.width;
+    canvas.height = loadedImage.height;
+    canvas.getContext("2d")?.drawImage(loadedImage, 0, 0);
+  }, [loadedImage]);
 
   return (
     <div className={styles.componentRoot}>
       <canvas ref={canvasRef} className={styles.image} />
       <Suspense fallback={<LoadingSpinner />}>
-        <ImageClassifications getClassifications={getImageClassifications} />
+        <ImageClassifications imageClassifications={imageClassifications} />
       </Suspense>
     </div>
   );

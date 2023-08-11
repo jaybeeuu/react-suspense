@@ -1,29 +1,43 @@
-import { Suspense } from "react";
-import { loadImage, classifyImage } from "../image-service";
+import { Suspense, useState } from "react";
+import { ErrorBoundary } from "react-error-boundary";
+import { classifyImage, loadImage } from "../image-service";
 import { ImageView } from "../image-view";
-import { usePromise } from "../use-promise";
 import { LoadingSpinner } from "../loading-spinner";
+import { useSemanticMemo } from "../use-promise";
 import styles from "./image-loader.module.css";
+import { ErrorView } from "../error-view";
 
 export interface ImageLoaderProps {
   file: File;
 }
+const useRetryToken = (): { retry: () => void; retryToken: number } => {
+  const [retryToken, setRetryToken] = useState<number>(0);
+  return {
+    retryToken,
+    retry() { setRetryToken((last) => last + 1); }
+  };
+};
 
 export const ImageLoader = ({ file }: ImageLoaderProps): JSX.Element => {
-  const getImage = usePromise(() => loadImage(file), [file]);
+  const { retry, retryToken } = useRetryToken();
+  const image = useSemanticMemo(() => loadImage(file), [file, retryToken]);
 
-  const getImageClassifications = usePromise(async () => {
-    const image = await getImage.promise;
-    return classifyImage(image);
-  }, [getImage.promise]);
+  const imageClassifications = useSemanticMemo(async () => {
+    return classifyImage(await image);
+  }, [image, retryToken]);
 
   return (
     <div className={styles.componentRoot}>
       <Suspense fallback={<LoadingSpinner/>}>
-        <ImageView
-          getImage={getImage}
-          getImageClassifications={getImageClassifications}
-        />
+        <ErrorBoundary
+          FallbackComponent={ErrorView}
+          onReset={() => retry()}
+        >
+          <ImageView
+            image={image}
+            imageClassifications={imageClassifications}
+          />
+        </ErrorBoundary>
       </Suspense>
     </div>
   );

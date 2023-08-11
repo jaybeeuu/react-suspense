@@ -11,6 +11,7 @@ export const loadImage = (file: File): Promise<HTMLImageElement> => {
 
     image.onload = async () => {
       await delay(3000);
+
       resolve(image);
     };
     image.onerror = onError;
@@ -34,12 +35,18 @@ export interface ImageClassification {
   probability: number;
 }
 
+const randomError = (): void => {
+  if (Math.random() < 0.1) {
+    throw new Error("There's gremulons in the expector. Try resetting your degrindator.");
+  }
+};
+
 export const classifyImage = async (image: HTMLImageElement): Promise<ImageClassification[]> => {
   await import("@tensorflow/tfjs-backend-webgl");
   const mobilenet = await import("@tensorflow-models/mobilenet");
   const model = await mobilenet.load();
   const classifications = await model.classify(image);
   await delay(3000);
-
+  randomError();
   return classifications;
 };
