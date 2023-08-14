@@ -45,6 +45,10 @@ const isObservedPromise = <Value>(promise: PromiseLike<Value>): promise is Obser
 };
 
 const observePromise = <Value>(promise: PromiseLike<Value>): ObservedPromise<Value> => {
+  if (isObservedPromise(promise)) {
+    return promise;
+  }
+
   const observedPromise: ObservedPromise<Value> = Object.assign(promise, { status: "pending" as  const });
 
   void (async () => {
@@ -60,7 +64,7 @@ const observePromise = <Value>(promise: PromiseLike<Value>): ObservedPromise<Val
 };
 
 export const usePromise = <Value>(promise: Promise<Value>): Value => {
-  const observedPromise = isObservedPromise(promise) ? promise : observePromise(promise);
+  const observedPromise = observePromise(promise);
 
   switch (observedPromise.status) {
     // eslint-disable-next-line @typescript-eslint/no-throw-literal
