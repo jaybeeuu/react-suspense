@@ -14,7 +14,7 @@ to classify the image in your browser.
 
 Loading and classifying the image are both asynchronous operations, classifications uses the output of te image load and so can't start until image load is complete.
 
-## Run it your self
+## Run it yourself
 
 This repo uses pnpm ot manage it's dependencies, and Vite to build the app.
 
