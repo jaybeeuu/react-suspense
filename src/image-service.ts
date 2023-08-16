@@ -10,7 +10,7 @@ export const loadImage = (file: File): Promise<HTMLImageElement> => {
     const image = new Image();
 
     image.onload = async () => {
-      await delay(3000);
+      await delay(1500);
 
       resolve(image);
     };
@@ -46,7 +46,7 @@ export const classifyImage = async (image: HTMLImageElement): Promise<ImageClass
   const mobilenet = await import("@tensorflow-models/mobilenet");
   const model = await mobilenet.load();
   const classifications = await model.classify(image);
-  await delay(3000);
+  await delay(1500);
   randomError();
   return classifications;
 };
