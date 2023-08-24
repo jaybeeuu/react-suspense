@@ -1,10 +1,10 @@
 For a while I've wanted to explore Suspense.
-I read a react blog post way back in 2019 about
+I read a React blog post way back in 2019 about
 [building great UX with React Suspense](https://legacy.reactjs.org/blog/2019/11/06/building-great-user-experiences-with-concurrent-mode-and-suspense.html).
-I remember it giving me a real aha moment.
-The description of the waterfall approach to loading data vs. loading data as you render really resonated with performance problems we'd had in a project I was working with at the time.
-Suspense though was experimental in react 16; the only thing that it was supported with was `Lazy` components,
-and I never like using experimental API's in production
+I remember it giving me a real "aha!" moment.
+The description of the waterfall approach to loading data vs loading data as you render really resonated due to performance problems we'd had in a project I was working with at the time.
+Suspense though was experimental in React 16; the only thing that it was supported with was `Lazy` components,
+and I never like using experimental APIs in production
 so I eagerly awaited the arrival of a stable API.
 
 But that day never arrived. I was put off and lost interest.
@@ -12,11 +12,11 @@ But that day never arrived. I was put off and lost interest.
 Years later the react team announced some
 really [interesting](https://react.dev/blog/2022/03/29/react-v18#new-feature-transitions)
 [features](https://react.dev/blog/2022/03/29/react-v18#new-suspense-features) in v18
-(concurrent rendering - multiverse theory for react applications?).
+(concurrent rendering - multiverse theory for React applications?).
 
 But while Suspense is now "Stable" and "Production Ready" it is _still_ only recommended for use in
 [data fetching frameworks](https://react.dev/blog/2022/03/29/react-v18#suspense-in-data-frameworks).
-And the docs _still_ don't describe how to it works; only how to use things like `Suspense` and `useTransition`.
+And the docs _still_ don't describe how it works; only how to use things like `Suspense` and `useTransition`.
 
 They tantalise by talking about what happens when a component "Suspends" or "while a component is loading", but not how to actually make a component suspend.
 There was a similar note at the beginning of the original post which always niggled too...
@@ -27,17 +27,17 @@ I remember feeling slightly patronised by that.
 Why can't I, as an _application author_, become master of my own destiny and make use of this powerful feature?
 Is it too complex for mere mortals to comprehend?
 
-What the react authors don't know is that in the intervening years I have become a
+What the React authors don't know is that in the intervening years I have become a
 [data fetching framework author](https://www.npmjs.com/package/@jaybeeuu/recoilless).
 So I think it's time to exercise my prerogatives.
 
-In this post I'm going to try to fill in the blanks in the `Suspense` documentation. How do you make components suspend & handle promises in a react application to build a fantastic UX?
+In this post I'm going to try to fill in the blanks in the `Suspense` documentation. How do you make components suspend & handle promises in a React application to build a fantastic UX?
 
 Let's see if I can sneak you in with my backstage pass, shall we?
 
 ## So what is Suspense any way?
 
-The answer surface answer to that question is well
+The surface answer to that question is well
 [documented](https://react.dev/reference/react/Suspense)
 \- it's a component:
 
@@ -57,7 +57,7 @@ It's easy to use:
 ~~~
 
 But there's no mention of actually how to make a component suspend.
-It's absence is obvious and weird, like they are dancing around it - "what elephant?".
+Its absence is obvious and weird, like they are dancing around it - "what elephant?".
 
 I dug into one of their examples to see if there were any answers there.
 [This example](https://codesandbox.io/s/s9zlw3?file=/index.js&utm_medium=sandpack),
@@ -138,7 +138,7 @@ See at the end - they `throw promise` as if it were an error.
 That's suspending.
 I feel like I should add a line to the docs:
 
-> If a react component throws a promise during it's render then it is said to have suspended.
+> If a React component throws a promise during it's render then it is said to have suspended.
 
 Welcome to the inner sanctum. Don't forget to pay your membership dues, and never talk about Suspense.
 The `Suspense` component essentially catches the promise, and renders the fallback in it's place.
@@ -188,7 +188,7 @@ The promise starts in `pending`.
 Then we use an asynchronous
 [IIFE](https://developer.mozilla.org/en-US/docs/Glossary/IIFE)
 to `await` the promise.
-When it resolves, we assign it the status to`fulfilled` and set a value property on the promise.
+When it resolves, we assign it the status to `fulfilled` and set a value property on the promise.
 If it rejects we likewise set the `rejected` status and set the error property.
 
 Back in `use` now,  we're up to the `switch/case`, where we decide how to handle what we have.
@@ -209,7 +209,7 @@ You can see us handling each of the three states a promise can be in:
 * `"rejected"` - the promise rejected and we throw the error.
 
 So that's `use`. Back in [Albums.js](https://codesandbox.io/s/s9zlw3?file=/Albums.js&utm_medium=sandpack)
-we can see it in the context of a react component. There they simply call it passing a promise they got from `fetchData()` (a simulated API call),
+we can see it in the context of a React component. There they simply call it passing a promise they got from `fetchData()` (a simulated API call),
 
     const albums = use(fetchData(`/${artistId}/albums`));
 
@@ -221,7 +221,7 @@ To belabour the point: there's three outcomes of that call.
 
 ## How do we... uh... reanimate?
 
-How do we let react know when the promise has fulfilled so it can have another try?
+How do we let React know when the promise has fulfilled so it can have another try?
 That bit is simple and, maybe, unsurprising.
 `Suspense` awaits the promise we throw and then attempts to render again when it resolves.
 A little experimentation with throwing other promises confirms that - if you return a promise that never resolves for example then suspense never retries the render.
@@ -230,7 +230,7 @@ Interestingly if the promise you throw doesn't resolve a value or resolves to an
 ## The bear trap
 
 Easy? Sounds it, but I'm going to let you into a secret - I've tried writing this before.
-I needed a hook to bind RXJS Observables into react and thought I might try using `Suspense`.
+I needed a hook to bind RXJS Observables into React and thought I might try using `Suspense`.
 I got in a horrible loop.
 That experience was, in part, motivation for this post.
 There's something extra that we need to make it all work and that's a little hidden in this example.
@@ -325,14 +325,14 @@ It would get called if the component reanimated successfully then unmounted, but
 For example if `Albums` started to render, made the promise and suspended. Then something in the application changed before the promise resolved, maybe the user navigates away or decides on a different band to look at. `Albums` is never reanimated by suspense, so we would never get that `useEffect` cleanup.
 
 Libraries like [`@tanstack/react-query`](https://tanstack.com/query/latest/docs/react/overview) do this for us, with declared timeouts and cache lengths that we can configure.
-So maybe it makes sense that the react team are pushing for us not to try and work with `Suspense` directly.
+So maybe it makes sense that the React team are pushing for us not to try and work with `Suspense` directly.
 It could lead us into some dangerous, time consuming, territory. As an application developer I want to be writing features, not caching mechanisms.
 
 On the other hand, it turns out that a cache like this isn't necessarily what's required.
 In a [only very slightly more complicated example application](https://github.com/jaybeeuu/react-suspense)
-I managed the promise managed with hooks in a [wrapper](https://github.com/jaybeeuu/react-suspense/blob/main/src/image-loader/image-loader.tsx) between the `Suspense` and the component that needed the data.
+I managed the promise with hooks in a [wrapper](https://github.com/jaybeeuu/react-suspense/blob/main/src/image-loader/image-loader.tsx) between the `Suspense` and the component that needed the data.
 The downside here being the separation between the creation of the data from the need for the data.
-But depending on your application, and philosophy, that could be desirable any way.
+But depending on your application, and philosophy, that could be desirable anyway.
 
 At first all of this seems like a weakness in the design, but having played with it a little,
 I actually think it lends some power of `Suspense`.
@@ -340,7 +340,7 @@ Remember one of the goals of suspense is to avoid waterfalls of data fetches.
 You don't want to render a component, wait for the data to load, only to render a child which also needs to wait for data to load.
 The need to manage the promise outside the component means you're forced into separating render from fetch,
 and therefore into the mindset that data and render are separate.
-Looking at the docs, the react team are
+Looking at the docs, the React team are
 [expecting and hoping for just that](https://legacy.reactjs.org/blog/2019/11/06/building-great-user-experiences-with-concurrent-mode-and-suspense.html#fetch-in-event-handlers).
 Preparatory calls to be made at the top level when transitional state changes are made,
 e.g. in the click handlers of links from routing libraries.
@@ -348,19 +348,19 @@ So that by the time the components are being rendered, the data they need is alr
 
 My wrapper also sidestepped some of that advantage as it wasn't that far from the component.
 Maybe that's OK in some use cases.
-The simplicity of having an operation declared and managed close to it's point of use, rather than off in he gods, and separated in the code base,
-might well be a desirable trade off depending on the scale of your application.
-Certainly some of the applications I have worked on, have been so large and complicated that it would take some very careful rearchitecting to put the data fetches next to the state changes that cause a component to be rendered somewhere in the tree, without creating an unmanageable tangle.
+The simplicity of having an operation declared and managed close to its point of use, rather than off in the gods, and separated in the code base,
+might well be a desirable trade-off depending on the scale of your application.
+Certainly some of the applications I have worked on have been so large and complicated that it would take some very careful rearchitecting to put the data fetches next to the state changes that cause a component to be rendered somewhere in the tree, without creating an unmanageable tangle.
 
 ## So where does that leave us?
 
-We've figured out how to make suspense work:
+We've figured out how to make Suspense work:
 
-> * If a react component throws a promise during it's render then it is said to have suspended.
+> * If a React component throws a promise during it's render then it is said to have suspended.
 > * Manage your promises, e.g. for data fetching, outside of the lifecycle and state of the suspended component.
 
 And overall I think suspense is an interesting approach to the problem of handling asynchrony in applications and what to display in the meantime.
-The way the React team have implemented it makes the actual use of that asynchrony nicely declarative,abstracting away a lot of that decision making form the application developers and presenting a decent base UX.
+The way the React team have implemented it makes the actual use of that asynchrony nicely declarative, abstracting away a lot of that decision making form the application developers and presenting a decent base UX.
 In combination with
 [transitions](https://react.dev/blog/2022/03/29/react-v18#new-feature-transitions)
 it's a powerful tool.
@@ -368,7 +368,7 @@ it's a powerful tool.
 [example application](https://github.com/jaybeeuu/react-suspense)
 but decided it was a topic for a whole other post.)
 
-Even though it is relatively simple to use, there's still a question about whether it's a good idea to do so. Especially in the face of all the react team's pleading for us not to do so. As with anything, that probably depends on your use case. If you're just hammering out an application then probably not, if you're writing a component library or framework intended to be consumed by other teams... maybe.
+Even though it is relatively simple to use, there's still a question about whether it's a good idea to do so. Especially in the face of all the React team's pleading for us not to do so. As with anything, that probably depends on your use case. If you're just hammering out an application then probably not, if you're writing a component library or framework intended to be consumed by other teams... maybe.
 
 I'm also left wondering if it's not a little too clever for it's own good.
 Much like hooks it feels like the learning curve is going to be steep, especially for those new to React, with plenty of pitfalls and foot-guns for folk to discover along the way.
@@ -377,7 +377,7 @@ Would it have been needed if the React authors had leaned into more of
 [JavaScripts built in features for handling asynchrony](https://crank.js.org/)
 rather than
 [being caught up by (hyped?) experimental frontiers](https://overreacted.io/algebraic-effects-for-the-rest-of-us/)?
-Maybe that's why the react team only really want libraries to adopt it?
+Maybe that's why the React team only really want libraries to adopt it?
 Best to hide the magic behind a library call so we don't have to look at it?
 
-Either way - it's here to stay and they do mention the possibility of introducing more primitives to lubricate it's use in the future, so maybe one day all of this will be ours.
+Either way - it's here to stay and they do mention the possibility of introducing more primitives to lubricate its use in the future, so maybe one day all of this will be ours.
