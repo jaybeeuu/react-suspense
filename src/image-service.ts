@@ -1,5 +1,6 @@
 import type { TypeAssertion } from "@jaybeeuu/utilities";
 import { asError, assert, delay, is } from "@jaybeeuu/utilities";
+import type { MobileNet } from "@tensorflow-models/mobilenet";
 
 const assertIsString: TypeAssertion<string> = assert(is("string"));
 
@@ -35,18 +36,33 @@ export interface ImageClassification {
   probability: number;
 }
 
+let hasErrored = false;
+
 const randomError = (): void => {
-  if (Math.random() < 0.1) {
-    throw new Error("There's gremulons in the expector. Try resetting your degrindator.");
+  if (!hasErrored) { // || Math.random() < 0.1) {
+    hasErrored = true;
+    throw new Error("There's grebulons in the expector. Try resetting your degrindator.");
   }
 };
 
+let mobileNetPromise: Promise<MobileNet> | null = null;
+
+export const getMobileNet = async (): Promise<MobileNet> => {
+  if (!mobileNetPromise) {
+    mobileNetPromise = (async () => {
+      await import("@tensorflow/tfjs-backend-webgl");
+      const mobileNet = await import("@tensorflow-models/mobilenet");
+      return mobileNet.load();
+    })();
+  }
+  return mobileNetPromise;
+};
+
 export const classifyImage = async (image: HTMLImageElement): Promise<ImageClassification[]> => {
-  await import("@tensorflow/tfjs-backend-webgl");
-  const mobilenet = await import("@tensorflow-models/mobilenet");
-  const model = await mobilenet.load();
-  const classifications = await model.classify(image);
-  await delay(1500);
+  const mobileNet = await getMobileNet();
+  const classifications = await mobileNet.classify(image);
+  await delay(2500);
   randomError();
+
   return classifications;
 };

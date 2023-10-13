@@ -20,11 +20,15 @@ const useRetryToken = (): { retry: () => void; retryToken: number } => {
 
 export const ImageLoader = ({ file }: ImageLoaderProps): JSX.Element => {
   const { retry, retryToken } = useRetryToken();
-  const image = useSemanticMemo(() => loadImage(file), [file, retryToken]);
+  const image = useSemanticMemo(
+    () => loadImage(file),
+    [file, retryToken]
+  );
 
-  const imageClassifications = useSemanticMemo(async () => {
-    return classifyImage(await image);
-  }, [image, retryToken]);
+  const imageClassifications = useSemanticMemo(
+    async () => classifyImage(await image),
+    [image, retryToken]
+  );
 
   return (
     <div className={styles.componentRoot}>

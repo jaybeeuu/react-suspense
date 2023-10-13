@@ -1,94 +1,213 @@
-For a while I've wanted to explore Suspense.
-I read a react blog post way back in 2019 about
-[building great UX with React Suspense](https://legacy.reactjs.org/blog/2019/11/06/building-great-user-experiences-with-concurrent-mode-and-suspense.html).
-I remember it giving me a real aha moment.
-The description of the waterfall approach to loading data vs. loading data as you render really resonated with performance problems we'd had in a project I was working with at the time.
-Suspense though was experimental in react 16; the only thing that it was supported with was `Lazy` components,
-and I never like using experimental API's in production
-so I eagerly awaited the arrival of a stable API.
+# React, Suspense and Transitions
 
-But that day never arrived. I was put off and lost interest.
+On a recent project, I tried to use suspense to bind an RxJS Observable to React components.
+It was unsuccessful, but in the process I learned some things about React Suspense - which is now "stable" although, not recommended for day to day use.
+The experience made me want to dig deeper and find out how, when and _if_ I _can_ use React Suspense in my applications.
+Along the way I found transitions, another really cool bit of React API.
 
-Years later the react team announced some
-really [interesting](https://react.dev/blog/2022/03/29/react-v18#new-feature-transitions)
-[features](https://react.dev/blog/2022/03/29/react-v18#new-suspense-features) in v18
-(concurrent rendering - multiverse theory for react applications?).
+In this post I'm going to give you a whistle stop tour of what suspense is, share my findings on the API works and point you at how you might be able to use it in your applications.
 
-But while Suspense is now "Stable" and "Production Ready" it is _still_ only recommended for use in
-[data fetching frameworks](https://react.dev/blog/2022/03/29/react-v18#suspense-in-data-frameworks).
-And the docs _still_ don't describe how to it works; only how to use things like `Suspense` and `useTransition`.
+I mentioned RxJS, to set the scene, but I'd like to explore Suspense, which is a general API; RxJS will just get in the way. So I'm going to keep it simple and just bind a promise to a React component (just a regular old JavaScript promise).
+All you'll need to consume this post is some React and JavaScript.
+I've used a sprinkling of TypeScript where it helps, and the example application is in TypeScript, but there's nothing too obscure.
 
-They tantalise by talking about what happens when a component "Suspends" or "while a component is loading", but not how to actually make a component suspend.
-There was a similar note at the beginning of the original post which always niggled too...
+## Why am I bothering?
 
-> This post will be most relevant to people working on data fetching libraries for React.
+React
+[recommend](https://react.dev/learn/start-a-new-react-project)
+that you use React through a framework at the moment, for example Next.js and Remix.
+Sort of moving from framework to platform.
+So why am I worrying about this at all? Those libraries have this nailed right?
 
-I remember feeling slightly patronised by that.
-Why can't I, as an _application author_, become master of my own destiny and make use of this powerful feature?
-Is it too complex for mere mortals to comprehend?
+Well... In the applications I have worked on with our clients (high performance, financial dashboards, with custom websocket based data protocols), those frameworks don't feel like a good choice.
+Either there's none that's really suitable, or the work required to make it happen is unviable.
 
-What the react authors don't know is that in the intervening years I have become a
-[data fetching framework author](https://www.npmjs.com/package/@jaybeeuu/recoilless).
-So I think it's time to exercise my prerogatives.
+In the case I sketched out above, I didn't want to re-write my application to use a framework.
+I just wanted to sprinkle in another way to bind existing models into my UI, to unlock the great interactions that Transitions promise.
+I wanted at the primitives.
 
-In this post I'm going to try to fill in the blanks in the `Suspense` documentation. How do you make components suspend & handle promises in a react application to build a fantastic UX?
+Historically you didn't _need_ a framework to access React's powerful features.
+But Suspense and concurrent rendering is a paradigm shift and leveraging it for our clients is both important and, for me at least, not a solved problem.
+I fear, the react ecosystem might be moving into a space where it's, accidentally, no longer a general purpose framework.
 
-Let's see if I can sneak you in with my backstage pass, shall we?
+## What's it all about?
 
-## So what is Suspense any way?
+Before I get into the weeds of what suspense is and how to use it, Let's talk about why we want to use it, and what problem it's trying to solve.
+It all comes down to Promises and a bit of a history lesson.
 
-The answer surface answer to that question is well
-[documented](https://react.dev/reference/react/Suspense)
-\- it's a component:
+React components don't really like asynchrony and they don't play well with promises.
+For example, you can't await inside a component, or, directly, inside hooks like `useEffect`.
 
-> `Suspense` lets you display a fallback until its children have finished loading.
+From a UI's point of view that kind of makes sense - the UI has to do _something_ regardless of whether it's ready.
+The user won't quietly `await` the promise.
+They want to know the button has been clicked or that the page is loading something.
 
-But "Loading" is doing a lot of work there - what does it mean for a component to be loading?
-Further down the page it talks about how a "component suspends while fetching [data]"
+This causes a problem.
+The web _is_ asynchronous.
+All those ajax calls we make to fetch data or dialogs we put up?
+All asynchronous.
+So how do you join the asynchronous world to a synchronous one?
 
-My understanding of that and the examples is - if you wrap a component tree in `Suspense` then, if the component tree requests data that isn't available,
-`Suspense` will display your fallback, usually some kind of loading indicator.
-It's easy to use:
+Historically the answer has been some kind of wrapper hook that tells us the state of the `Promise`.
+You'll probably have seen this kind of thing, for example; it's how
+[`React-query`](https://github.com/TanStack/query/blob/2.x/docs/src/pages/docs/overview.md#enough-talk-show-me-some-code-already)
+works by default, and it's what I fell back to when my efforts with RxJS failed.
 
-~~~ jsx
-<Suspense fallback={<SomeLoadingSpinner />}>
-  <YourDataHungryComponent />
-</Suspense>
-~~~
+Something like this:
 
-But there's no mention of actually how to make a component suspend.
-It's absence is obvious and weird, like they are dancing around it - "what elephant?".
+```jsx
+export const usePromise = (somethingAsync, deps) => {
+  const [state, setState] = useState({  status: 'pending' });
+  useEffect(() => {
+    (async () => {
+      setState({ status: 'pending' });
+      try {
+        const value = await somethingAsync();
 
-I dug into one of their examples to see if there were any answers there.
-[This example](https://codesandbox.io/s/s9zlw3?file=/index.js&utm_medium=sandpack),
-from
-[the suspense docs usage section](https://react.dev/reference/react/Suspense#usage)
-looked promising, showing all the key features we're interested in and is really simple.
-It displays a button, which you can click to (fake) fetch, then display album data for a niche 60's pop band.
-
-![the-beatles.gif](./the-beatles.gif)
-
-It's simple enough that we can see all the moving parts, and they haven't used a library... so...
-
-Picking through it, there's only few components in there, but the three we are interested in are these:
-
-~~~ jsx
-function ArtistPage({ artist }) {
-  return (
-    <>
-      <h1>{artist.name}</h1>
-      <Suspense fallback={<Loading />}>
-        <Albums artistId={artist.id} />
-      </Suspense>
-    </>
-  );
+        setState({ status: 'fulfilled', value });
+      } catch (error) {
+        setState({ status: 'rejected', error })
+      }
+    })();
+  }, deps);
 }
+```
 
-function Loading() {
-  return <h2>🌀 Loading...</h2>;
+Roughly, use `useState` with an initial value something like  `{ status: 'pending' }` In `useEffect`,  then `await` the promise.
+When the promise resolves `setState` to `{ status: 'fulfilled', value }` where value is what the promise resolved to.
+If it fails then `setState({ status: 'rejected', error: theError })`.
+
+That lets you use an `if...else` or `switch` in your component to display some feedback to the user.
+
+```jsx
+export const AsyncComponent = () => {
+  const dataState = usePromise(() => getData(), []);
+
+  if (dataState.status === 'pending') {
+    return <Loading />;
+  }
+  if (dataState.status === 'rejected') {
+    throw dataState.error; // let an ErrorBoundary handle it
+  }
+
+  return <DisplayYourData data={data} />
 }
+```
 
-function Albums({ artistId }) {
+Here `usePromise` takes a method signature like this:
+
+```ts
+type getData = () =>  Promise<Data>;
+```
+
+which we'd need to `await` to get the data, and changes it into something like this:
+
+```ts
+type useData = () =>  PromiseState<Data>;
+```
+
+which is Synchronous, so when the data is available, we just have it.
+We use `useState` to prompt React when the state of the promise changes and the component needs to rerender.
+
+That works, but it doesn't sit very well.
+All those conditional statements don't play well with the
+[rules of hooks](https://React.dev/warnings/invalid-hook-call-warning)
+for example, and the imperative style feels off when it sits next to the more declarative React API's like `ErrorBoundary`.
+
+It also encourages the fetch-on-render pattern which degrades User Experience.
+When a user takes an action, the UI is whisked away, replaced with a loading spinner, then that too disappears to be replaced with, maybe another loading spinner as the next component down the tree renders, discovers it needs to fetch something and so renders a loading spinner...
+If your fetches are quick enough these spinners might flicker up on the screen for just long enough to disconcert.
+
+There's been discussion on this topic for a long time.
+For example I remember reading
+[this post](https://legacy.Reactjs.org/blog/2019/11/06/building-great-user-experiences-with-concurrent-mode-and-suspense.html).
+Generally the consensus is now to aim to fetch-while-you-render.
+The user triggers an action, which causes the data to be fetched, then while the data is loading, tell React to draw the new UI.
+Hopefully by the time you get there the data has loaded, maybe you don't need to show a loading spinner at all.
+The application feels more polished and reassuringly professional.
+
+That's really hard with the tools we have to hand in the React ecosystem though, and there's not been framework support either.
+But... the React team have been promising to solve those problems with `Suspense` and "Concurrent Rendering" for years and now it's arrived (kind of).
+
+## So what is Suspense anyway?
+
+[`Suspense`](https://React.dev/reference/React/Suspense) is a way to declaratively tell React what to do when components aren't ready to render yet.
+
+It's been there for a long time already and you might have even used it in conjunction with
+[Relay](https://relay.dev/)
+or
+[`lazy`](https://React.dev/reference/React/lazy).
+However the API has always bee declared "experimental" with those two applications of it being the one ones that React officially support.
+With the release of React 18 last year, it was announced as "stable".
+Although, only to be integrated into
+[data fetching frameworks](https://React.dev/blog/2022/03/29/React-v18#suspense-in-data-frameworks).
+Still.
+Maybe time to take a closer look.
+
+Let's get into that a bit - here it is being used with `lazy`:
+
+```jsx
+import { lazy, Suspense } from 'React';
+import { Loading } from './loading.js';
+
+const SomeComponent = lazy(() => import('./some-component.js'));
+
+export const Wrapper = () => (
+  <Suspense fallback={<Loading/>} >
+    <SomeComponent />
+  </Suspense>
+);
+```
+
+`SomeComponent` is declared as "lazy", i.e. we don't want to load _the code_ for that component into the browser _until_ we need it. The `import('./some-component.js')` in the callback passed to `lazy` is a "Dynamic import" which tools like
+[webpack](https://webpack.js.org/guides/code-splitting/#dynamic-imports)
+will use to split the code up so you can save on the initial page load.
+Have a look a at the links if you want more detail there, but the point is that callback passed into `lazy` returns a `promise` which resolves when the component is ready to be rendered.
+In React parlance, `SomeComponent` "suspends" until it is ready to render.
+
+The `Suspense` component declares what to do while we're waiting - `fallback={<Loading/>}`.
+It detects that `SomeComponent` has suspended and renders the `Loading` component in it's place (probably a loading spinner).
+
+A neat thing about `Suspense` is you can think of it as a little like a `try...catch` block.
+The nearest `Suspense` component in the tree is the one that displays it's fallback, and it doesn't matter what happens in between.
+For example:
+
+```jsx
+export const Wrapper = () => (
+  <Suspense fallback={<OuterLoading />} >
+    <SomeComponent />
+    <Suspense fallback={<InnerLoading />} >
+      <div>
+        <SomeOtherComponent />
+      </div>
+    </Suspense>
+  </Suspense>
+);
+```
+
+If `SomeComponent` suspends then we see `OuterLoading`. If `SomeOtherComponent` suspends then we see `InnerLoading`; working up the tree from `SomeOtherComponent`, that's the next Suspense you come to.
+The `div` in between makes no difference, just as with a `try...catch` it doesn't matter how many function calls deeps you go between the `try...catch` and the `throw`. The Error bubbles back up through the call stack until it finds a catch block. IN the same way, when the promise is thrown by a component, it bubbles back up through the component tree until it finds a `Suspense`.
+
+Hopefully that's clear as mud, but the the eagle eyed among you may have noticed that I haven't described the other end of the chain. How do I, as a component author, declare that my component has "suspended"?
+
+Well... that's where things get curious. If you look at the docs for
+[Suspense](https://React.dev/reference/React/Suspense)
+you won't find it mentioned anywhere.
+
+## Suspend
+
+So here's where we have to go sleuthing. In the docs, while we don't get it spelled out for us, we do find
+[example snippets which show how to use `Suspense`](https://React.dev/reference/React/Suspense#usage).
+Since these are just examples they are pretty simple, and don't use real data fetchs or libraies, so we get the unvarnished truth.
+
+The you can find [this](https://codesandbox.io/s/ymcj43?file=/Albums.js) example in the usage section of the docs. It doesn't do much:
+
+![The Beatles](./the-beatles.gif)
+
+The bit we care about is in `Albums.js`, which contains 2 things - a component and a hook. That looks like this:
+
+```jsx
+export default function Albums({ artistId }) {
   const albums = use(fetchData(`/${artistId}/albums`));
   return (
     <ul>
@@ -100,15 +219,18 @@ function Albums({ artistId }) {
     </ul>
   );
 }
-~~~
+```
 
-`ArtistPage` uses `Suspense` to display a fallback (`Loading`) if it's child (`Albums`) "suspends".
-[`use`](https://codesandbox.io/s/s9zlw3?file=/Albums.js&utm_medium=sandpack)
-must be the place where the magic happens.
+Fetches some data and then displays it. `fetchData` is pretty noddy - it mimics an ajax call, and returns a promise of the data.
+If you look in
+[ArtistPage.js](https://codesandbox.io/s/ymcj43?file=/ArtistPage.js:165-262),
+you'll see that `Albums` is wrapped in a `Suspense`. So we're going to see a loading spinner until the data returns.
 
-There it is, under yet another note telling me, _please_, don't look behind the curtain (sorry Oz...).
+You'll notice that there's a `use()` wrapping the `fetchData` call, and that we seem to have the raw data returned from that call; there's no `await` or switching logic, this component is kept pretty clean. Use seems to have changed `Promise<Value>` straight to `Value` without having to await it.
 
-~~~ jsx
+[`use`](https://codesandbox.io/s/ymcj43?file=/Albums.js:669-1188) is where the magic happens:
+
+```jsx
 function use(promise) {
   if (promise.status === 'fulfilled') {
     return promise.value;
@@ -131,253 +253,242 @@ function use(promise) {
     throw promise;
   }
 }
-~~~
+```
 
-See at the end - they `throw promise` as if it were an error.
+If you squint at that and turn your head to the side it kind of looks like a mashup of the component and hook we had before.
+We can see some status monitoring happening with some `if...else` logic, and we can see the promise being `.then`'ed (equivalent of the `await` we had before).
+In this case (remember it's an example) the promise is being mutated to store that state, and we're not using `useState` but we basically have the same things gong on as before.
 
-That's suspending.
-I feel like I should add a line to the docs:
+Working down the the branches you can even see similar things, if the promise is `'fulfilled'`, the value is returned synchronously (the component will display it).
+If the Promise is `'rejected'`, the `reason` (error) is thrown for an `ErrorBoundary` to catch (not implemented in this example).
 
-> If a react component throws a promise during it's render then it is said to have suspended.
+Then the new bit - if the promise has a status of `'pending'` then `throw promise`, otherwise (there's no status on the promise, i.e. we haven't seen it before), attach `'pending'`, `await` the promise, then `throw` it.
 
-Welcome to the inner sanctum. Don't forget to pay your membership dues, and never talk about Suspense.
-The `Suspense` component essentially catches the promise, and renders the fallback in it's place.
-I'm not sure whether or not it's actually directly in the call stack, I suspect there's more of an event model at play, like with `Error Boundaries`,
-but catching feels like a good enough mental model.
+Throwing the promise turns out to be all you need to do - if React catches a promise it considers the component to have "suspended" and falls back to the nearest `Suspense` components fallback.
+It awaits the promise, then attempts to rerender the component.
 
-Let me pick `use` apart and refactor it a bit, so that we can see what's happening.
+## Testing the Theory
 
-~~~ jsx
-export const use = (promise) => {
-  observePromise(promise);
+This is the point I got to with my previous effort to tame Suspense and use it with RxJS. But there was a nuance that isn't obvious here, and tripped me up. So for this post I wanted to go a little further and try the thing out.
 
-  switch (promise.status) {
-    case "pending": throw promise;
-    case "fulfilled": return promise.value;
-    case "rejected": throw promise.error;
-  }
+I needed a little problem to solve, and settled on a noddy app which uses one of the
+[pre-trained tensorflow.js models, `mobilenet`](https://github.com/tensorflow/tfjs-models/tree/master/mobilenet),
+to classify images uploaded from the desktop.
+That made everything pretty simple. There's no backend to worry about, but it is an asynchronous operation. We need to `await` the image then the classifications and, so we need to suspend a component.
+
+The [full listings are here](https://github.com/jaybeeuu/React-suspense) and here's a gif of it in action:
+
+![First Load](./first-load.gif)
+
+I've recorded this erroring so you can see the error boundary getting activated, but once your degrindator has shaken the grebulons out of the system, you see the image as soon as it's uploaded, then the classifications, once they've been calculated.
+(MobileNet is right - that's a North American black bear I snapped in Canada.)
+
+There's quite a bit going on here, and I'm not going to talk through the whole app for fear of boring you.
+Look at the code if you're interested. For now I'd like to focus on this component:
+
+```jsx
+export interface ImageClassificationsProps {
+  imageClassifications: Promise<ImageClassification[]>;
+}
+
+export const ImageClassifications = ({ imageClassifications }: ImageClassificationsProps): JSX.Element => {
+  const resolvedClassifications = usePromise(imageClassifications);
+
+  return (
+    <ul>
+      {resolvedClassifications.map((classification) => (
+        <li key={classification.className}>
+          {classification.className} ({Math.round(classification.probability * 100)}%)
+        </li>
+      ))}
+    </ul>
+  );
 };
-~~~
+```
 
-The first line on that function we "observe" the promise. Here's what that looks like:
+This is the component you see loading at the bottom of the screen, and displays the classifications. The `imageClassifications` prop is a `promise` of `ImageClassification[]` - that's the data MobileNet returns us. The component uses the promise and then displays the data returned. I've not shown it, but this component is wrapped in a `Suspense` component - so if it suspends we get a loading spinner.
+`usePromise` Is how we glue the two together, that's listed [here](https://github.com/jaybeeuu/React-suspense/blob/bf9ffd094ccad973fa617f38816c409c6c3aac8a/src/use-promise.ts).
+It's a TypeScript'd and refactored version of the `use` hook shown above so I won't bother showing the listing here - The highlight is if the promise is **pending**, it throws the promise, if its's rejected then it throws the error, and if it's resolved then it synchronously returns the result.
 
-~~~ jsx
-const observePromise = (promise) => {
-  if (isObservedPromise(promise)) {
-    return;
-  }
+I think this is pretty neat.
+It fits really well with the way ErrorBoundaries work for example.
+The component consuming my asynchronous data doesn't need to handle any of the other states; loading and errors are handled elsewhere in the app.
+There's a down side which is that it's a little magical - it's not obvious from the signature of the hook or the component consuming it, that you need to have it wrapped in a suspense layer.
 
-  promise.status = "pending";
+## The Rub
 
-  void (async () => {
-    try {
-      promise.value = await promise;
-      promise.status = "fulfilled";
-    } catch (error) {
-      promise.error = error;
-      promise.status = "rejected";
-    }
-  })();
+As you can see, that really is all you need to do to get the component to suspend. There is that nuance I mentioned though.
+Initially I had implemented this in what appeared to be a similar fashion to the approach taken by the React doc's example and fetched/asked MobileNet for the classifications inline in the component.
+
+But that looped. The component suspended, then rerendered, then suspended again, over and over, and MobileNet was being asked for classifications over and over again too. That threw _me_ for a loop until I spotted this
+[caveat](https://React.dev/reference/React/Suspense#caveats)
+in the React docs:
+
+> React does not preserve any state for renders that got suspended before they were able to mount for the first time. When the component has loaded, React will retry rendering the suspended tree from scratch.
+
+Ahh... so every time my promise resolved, React rerendered `ImageClassifications` _from_ scratch, defeating my memoisation of the promise, and asks MobileNet again, creating a new Promise instance, which then was put into pending...
+
+Looking back at the example in the docs they cheat (well - it's an example) a bit. The promises `fetchData` makes are cached for the lifetime of the app in a module level `Map` you can see it here in
+[data.js](https://codesandbox.io/s/ymcj43?file=/data.js:170-193).
+
+So that gives us a rule to keep in mind when we make components suspend.
+You must manage your promises outside of the components that consume them, and you can't use hooks to cache them.
+You must cache them yourself.
+
+And here's where we've hit the run.
+Having to cache those promises outside of the component that uses them raises all sorts of issues. How long do you cache them for?
+How do you key that cache?
+How do you know when to clean it up and how do you trigger that?
+You can't use `useEffect` teardown for example - I tried it out and if the component suspends then it happens before `useEffects` are triggered, so they are never called.
+If you navigated away before the promise resolved then you would never clean up that promise.
+Memory leak.
+
+It means you can't just manage the promises directly in the components that consume them, you have to pass the promises around or they have to be persistent somehow outside of React, with lifecycles of their own and keys that let you access them.
+That's a hard problem to solve in a roll-your-own solution, which might be why the React team have recommended that we use `Suspense` for libraries and haven't publicised the "suspend" end of the API yet.
+
+You can (although it's not quite what I settled on) manage the promise in any component between `Suspense` and the component that suspends; that works fine.
+Or you can pass the promises down from the top levels, as I've done(contexts would make this easier in a larger app).
+It's only the component that suspended that gets started from scratch.
+
+However... I also noticed some weirdness when I was debugging my app.
+That Error I showed is generated when a module lebel boolean flag is false. The first time you request the classifications, it errors, then sets the flag true, and works from then on.
+Wierdly though I wasn't seeing the error at all.
+When I dug into it, it turns out that [StrictMode](https://react.dev/reference/react/StrictMode),
+was the problem.
+Because my effects weren't idempotent (running them more than once has no impact on how they function), I was getting strange results.
+Strict mode means that all effects get a sort of "warm up" cycle during mount, to help you shake out bugs which can show up in concurrent rendering scenarios.
+It's really important to have it on, if you are.
+
+I think this kills the pass promises down business and means you need to write a separate, stateful, service, which manages the lifecycle of the promises...
+
+In trying to solve that problem mentally I think I'm converging on something like
+[`React-query`](https://tanstack.com/query/latest)
+that I mentioned earlier.
+It looks like it _might_ solve these problems, allowing you to create a "query" with an arbitrary async function, and call it within your component and it does have an experimental
+["suspense mode"](https://tanstack.com/query/latest/docs/react/community/suspensive-react-query).
+So long as your "key" is stable, it will take care of caching and GC if the query get's abandoned.
+Further experimentation is needed perhaps.
+
+Still - with some compromise, effort, an import or combinations thereof, we have some way to simply integrate asynchronous operations in to React applications, and it leaves the application code completely unaware of the asynchrony, and devoid of logic handling it. So that's nice.
+
+## The Next Step
+
+There was another part of the React 18 announcement that went along with the suspense "release". That's the
+["Transitions"](https://React.dev/blog/2022/03/29/React-v18#new-feature-transitions).
+This is pretty neat. Essentially, wrap the change that will cause a component to suspend, and you're UI isn't whisked away, it remains until the new tree is ready to render.
+
+Check this out:
+
+![Reload](reload.gif)
+
+This time, we start where we left off - we've just loaded and classified the bear image. Is select an image of a
+[Pacific White-Sided Dolphin](https://en.wikipedia.org/wiki/Pacific_white-sided_dolphin).
+
+THis time though, when the open file dialog closes, we still see the bear. There's a little loading spinner added up top, and the choose file button has been disabled.
+Then after a little delay we get the image and the classifications all on one go. (MobileNet is confused this time, but, to be fair; pacific white-sided dolphins do bear a passing resemblance to orca and I'll bet weren't in the training data.)
+
+The difference in the user experience is stark. Must be a lot of very complex code right? Not a bit - it's the exactly the same.
+
+What's happened?
+
+The trick here is in the
+[`onChange` on the file input in `App`](https://github.com/jaybeeuu/React-suspense/blob/main/src/app/App.tsx#L20-L30):
+
+```tsx
+export const App = (): JSX.Element => {
+  const [file, setFile] = useState<File | null>();
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <>
+      <header className={styles.header}>
+        <h1>React Suspense</h1>
+      </header>
+
+      <main className={styles.main}>
+        <label>
+          Choose an image to classify:
+          <input
+            disabled={isPending}
+            type="file"
+            onChange={(e) => {
+              startTransition(() => {
+                void getMobileNet(); // get MobileNet loading, but don't wait for it.
+                setFile(e.currentTarget.files?.item(0));
+              });
+            }}
+            accept="image/*"
+          />
+          {isPending ? <LoadingSpinner size={"small"} /> : null}
+        </label>
+        {file ? (
+          <ImageLoader file={file} />
+        ) : null}
+      </main>
+    </>
+  );
 };
-~~~
+```
 
-If we've already observed then just return, there's nothing to do.
-Otherwise there's a bit of mutation (I'm biting my tongue - this is an example after all) going on to assign statuses and values etc. into properties on the promise.
+The state change that causes the app to change the image we're interested in is `setFile(e.currentTarget.files?.item(0))` (see the `useState` call up top.).
+You'll notice that that is wrapped in a call to `startTransition` which, in turn, comes from a hook -
+[`useTransition`](https://React.dev/reference/React/useTransition).
 
-The promise starts in `pending`.
-Then we use an asynchronous
-[IIFE](https://developer.mozilla.org/en-US/docs/Glossary/IIFE)
-to `await` the promise.
-When it resolves, we assign it the status to`fulfilled` and set a value property on the promise.
-If it rejects we likewise set the `rejected` status and set the error property.
+`startTransition` marks the state change for React, so it knows we're about to change the UI dramatically. Rather than change what the user sees immediately, React copies the tree, passes the new state into the copy (in our case `file` goes into `ImageLoader`, which triggers the file load and classification), then starts rendering the components. All the while, React continues to maintain the original UI; passing us back `true` on `isPending` so we can  the user know something is happening (mini loading spinner & disable the input).
 
-Back in `use` now,  we're up to the `switch/case`, where we decide how to handle what we have.
-Those lines again so you don't need to scroll:
+Only when the new tree is ready will React actually commit it to the UI and change wha the user sees, in our case once the image has loaded and the classifications have returned.
 
-~~~ jsx
-switch (promise.status) {
-  case "pending": throw promise;
-  case "fulfilled": return promise.value;
-  case "rejected": throw promise.error;
-}
-~~~
+That looks something like this:
 
-You can see us handling each of the three states a promise can be in:
+```mermaid
+sequenceDiagram
+  participant User as User
+  participant App as <App>
+  participant React as React
+  participant ImageLoader as (Copied) <ImageLoader>
+  participant ImageService as Image Service
 
-* `"pending"` - we're still waiting for a value, throw the promise.
-* `"fulfilled"` - we've got a value, return it synchronously.
-* `"rejected"` - the promise rejected and we throw the error.
+  User ->> App: Select File
+  App ->> React: startTransition
+  App ->> React: setFile
+  React ->> App: isPending = true
+  App ->> User: Show loading spinner
+  App ->> User: Disable input
+  React ->> React: Copy current tree
+  React ->> ImageLoader: render (with new file)
+  ImageLoader ->> ImageService: Load & classify image
+  ImageLoader ->> React: Suspend (throw the promise)
+  ImageService ->> React: Image resolves
+  ImageService ->> React: Classifications resolves
+  React ->> User: Update UI with new tree
+```
 
-So that's `use`. Back in [Albums.js](https://codesandbox.io/s/s9zlw3?file=/Albums.js&utm_medium=sandpack)
-we can see it in the context of a react component. There they simply call it passing a promise they got from `fetchData()` (a simulated API call),
+This is concurrent rendering in action (React's own version of multi-universe theory).
 
-    const albums = use(fetchData(`/${artistId}/albums`));
+And this is the exact same code as the original user flow!
+I promise!
+Can you imagine trying to do that without using suspense?
+I've tried; it's hard. You have to know things about the tree you're moving too, like all of the data it might need to request.
 
-To belabour the point: there's three outcomes of that call.
+## Conclusions
 
-* thrown error (which we could catch with an [error boundary](https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary)),
-* thrown promise (the component "suspends") caught by the `Suspense` in `ArtistPage`, which falls back to the `Loading` component.
-* the value - allows the component to render.
+I feel that suspense is a powerful feature, and will unlock a lot of cool things we can do with React, especially when used in conjunction with `useTransition`.
+Once library authors catchup a bit, or it becomes further democratised I'm sure it could help us in building awesome UX.
 
-## How do we... uh... reanimate?
+However, I'm left wondering if the team haven't gone a bit too far
+[down the rabbit hole here](https://overReacted.io/algebraic-effects-for-the-rest-of-us/),
+and done something that was a bit too clever for it's own good.
+Maybe it would have just been better to let us use the features built into the language and
+[allow components be asynchronous](https://crank.js.org/)?
+Sometimes, if it's hard to use; it's because you're doing it wrong.
+I mentioned up top that the React framework has moved to a platform and expect us now to develop with it through frameworks.
+And this API is definitely an example of that.
+It doesn't seem there's a good application developer level solution here.
 
-How do we let react know when the promise has fulfilled so it can have another try?
-That bit is simple and, maybe, unsurprising.
-`Suspense` awaits the promise we throw and then attempts to render again when it resolves.
-A little experimentation with throwing other promises confirms that - if you return a promise that never resolves for example then suspense never retries the render.
-Interestingly if the promise you throw doesn't resolve a value or resolves to an unrelated value, the component still renders properly... more on that later.
-
-## The bear trap
-
-Easy? Sounds it, but I'm going to let you into a secret - I've tried writing this before.
-I needed a hook to bind RXJS Observables into react and thought I might try using `Suspense`.
-I got in a horrible loop.
-That experience was, in part, motivation for this post.
-There's something extra that we need to make it all work and that's a little hidden in this example.
-
-Have a look again at `<Albums>`.
-When it is rendered, it uses `fetchData`, which returns the promise that is passed to `use`.
-Fine.
-
-The problem is that _we need to have seen the promise before_.
-Remember at the beginning of `observePromise`
-
-~~~ jsx
-if (isObservedPromise(promise)) {
-    return promise;
-}
-~~~
-
-If the promise has already been observed then simply return it.
-But that means we need to have seen this _exact instance_ of a promise before.
-Otherwise we're back to pending mode and we'll suspend. That could make a loop.
-
-The example works though, and we're making a bare call to `fetchData` there's no  `useRef` or `useMemo`
-(although that
-[shouldn't be for data fetches and resource management](https://react.dev/reference/react/useMemo#caveats)
-).
-So on each render of `<Albums>` we are making a new call to `fetchData` and, on first glance, getting a new `promise`.
-
-Which means we can't possibly pass an observed promise into `use` and so should always suspend?
-Don't we **need** something to stabilise the `promise` reference, and avoid making network requests over and over?
-This was the cause of my loop in the RXJS binding.
-On each render, I subscribed to the Observable again and made a new promise, which went to pending and suspended the component, when the promise resolved I rerendered the component... forever.
-My default reaction was to use `useRef` and effects to stabilise the subscription,
-but that didn't help.
-It turns out no hook can help us here.
-When the promise resolves, and `Suspense` "rerenders" the component, it really starts from scratch with an entirely new instance of the child component, there's no "re-" about it.
-This is mentioned in the [`Suspense`](https://react.dev/reference/react/Suspense#caveats) docs:
-
-> React does not preserve any state for renders that got suspended before they were able to mount for the first time.
-> When the component has loaded, React will retry rendering the suspended tree from scratch.
-
-Remember how I said that the value the promise resolves to doesn't matter?
-This is why.
-`Suspense` doesn't pass the value back into a half rendered component.
-How could it?
-JS doesn't support that control flow for `throw` statements.
-React, while it does seem magical, is still running in the JavaScript runtime.
-Instead, `Suspense` just renders the component as if it had never tried in the first place.
-I'm going to call it reanimating from now on so we don't fall into the rerender mental model.
-
-The example though, doesn't loop, so we must have missed something.
-Let's have another look at `fetchData`, maybe there's answers in there.
-From [`data.js`](https://codesandbox.io/s/s9zlw3?file=/data.js:170-316&utm_medium=sandpack):
-
-~~~ jsx
-let cache = new Map();
-
-export function fetchData(url) {
-  if (!cache.has(url)) {
-    cache.set(url, getData(url));
-  }
-  return cache.get(url);
-}
-~~~
-
-Right - a cache.
-Either the cache doesn't have a record for our URL, so we make a "request" (`getData`) and set the promise into the cache,
-or we simply retrieve a pre-existing promise (which is subsequently mutated \*shudder\* when we observe it).
-The map is in the root scope of the module, not in the function, so it is created the the first time the module is imported, and exists for the lifetime of the application.
-So long as the URL is the same, we get the same promise, regardless of the caller and for the lifetime of the application.
-
-Great - and I think we understand enough to add a second line to our documentation:
-
-> Manage your data fetches outside of the life cycle and state of the suspended component.
-
-You can't rely on React state and component life cycle to manage your data fetches.
-Maybe you can trigger them with a render, as is done here, but something else needs to track them and play them back when they resolve.
-In production couldn't quite be a simple as the `Map` we see here - that would be a memory leak.
-The Map isn't told when we're done with the promise, so it would keep references to all the promises the app ever made, forever.
-Over time that could eat a lot of memory.
-Something would have to along and tidy up that `Map` to remove requests we're finished with.
-
-Here we're finally at something which is tricky, and thar be dragons.
-Managing a cache like this is notoriously difficult.
-
-When should we remove that promise from the map?
-do it too soon and your application won't work, in our case we could end up in cycles, do it too late and you end up with a huge memory footprint.
-Here, the component which triggered the fetch in the first place can't be used to manage cleanup either, so something else would have to weigh in.
-For example, we could add some clean up logic to a `useEffect`, but then when would it get called?
-A little experimentation indicates it _doesn't_ get called when the component suspends, even if it's set up before the component suspended.
-(the effect is also not called so `useEffect`'s are still safe in suspending components.)
-It would get called if the component reanimated successfully then unmounted, but what if it _never_ reanimates?
-For example if `Albums` started to render, made the promise and suspended. Then something in the application changed before the promise resolved, maybe the user navigates away or decides on a different band to look at. `Albums` is never reanimated by suspense, so we would never get that `useEffect` cleanup.
-
-Libraries like [`@tanstack/react-query`](https://tanstack.com/query/latest/docs/react/overview) do this for us, with declared timeouts and cache lengths that we can configure.
-So maybe it makes sense that the react team are pushing for us not to try and work with `Suspense` directly.
-It could lead us into some dangerous, time consuming, territory. As an application developer I want to be writing features, not caching mechanisms.
-
-On the other hand, it turns out that a cache like this isn't necessarily what's required.
-In a [only very slightly more complicated example application](https://github.com/jaybeeuu/react-suspense)
-I managed the promise managed with hooks in a [wrapper](https://github.com/jaybeeuu/react-suspense/blob/main/src/image-loader/image-loader.tsx) between the `Suspense` and the component that needed the data.
-The downside here being the separation between the creation of the data from the need for the data.
-But depending on your application, and philosophy, that could be desirable any way.
-
-At first all of this seems like a weakness in the design, but having played with it a little,
-I actually think it lends some power of `Suspense`.
-Remember one of the goals of suspense is to avoid waterfalls of data fetches.
-You don't want to render a component, wait for the data to load, only to render a child which also needs to wait for data to load.
-The need to manage the promise outside the component means you're forced into separating render from fetch,
-and therefore into the mindset that data and render are separate.
-Looking at the docs, the react team are
-[expecting and hoping for just that](https://legacy.reactjs.org/blog/2019/11/06/building-great-user-experiences-with-concurrent-mode-and-suspense.html#fetch-in-event-handlers).
-Preparatory calls to be made at the top level when transitional state changes are made,
-e.g. in the click handlers of links from routing libraries.
-So that by the time the components are being rendered, the data they need is already being fetched.
-
-My wrapper also sidestepped some of that advantage as it wasn't that far from the component.
-Maybe that's OK in some use cases.
-The simplicity of having an operation declared and managed close to it's point of use, rather than off in he gods, and separated in the code base,
-might well be a desirable trade off depending on the scale of your application.
-Certainly some of the applications I have worked on, have been so large and complicated that it would take some very careful rearchitecting to put the data fetches next to the state changes that cause a component to be rendered somewhere in the tree, without creating an unmanageable tangle.
-
-## So where does that leave us?
-
-We've figured out how to make suspense work:
-
-> * If a react component throws a promise during it's render then it is said to have suspended.
-> * Manage your promises, e.g. for data fetching, outside of the lifecycle and state of the suspended component.
-
-And overall I think suspense is an interesting approach to the problem of handling asynchrony in applications and what to display in the meantime.
-The way the React team have implemented it makes the actual use of that asynchrony nicely declarative,abstracting away a lot of that decision making form the application developers and presenting a decent base UX.
-In combination with
-[transitions](https://react.dev/blog/2022/03/29/react-v18#new-feature-transitions)
-it's a powerful tool.
-(I also make use of that API in my
-[example application](https://github.com/jaybeeuu/react-suspense)
-but decided it was a topic for a whole other post.)
-
-Even though it is relatively simple to use, there's still a question about whether it's a good idea to do so. Especially in the face of all the react team's pleading for us not to do so. As with anything, that probably depends on your use case. If you're just hammering out an application then probably not, if you're writing a component library or framework intended to be consumed by other teams... maybe.
-
-I'm also left wondering if it's not a little too clever for it's own good.
-Much like hooks it feels like the learning curve is going to be steep, especially for those new to React, with plenty of pitfalls and foot-guns for folk to discover along the way.
-Suspendable components making use of it effectively get an extra, undeclared result/return value which is surprising given it's not the intended use of the `throw` statement.
-Would it have been needed if the React authors had leaned into more of
-[JavaScripts built in features for handling asynchrony](https://crank.js.org/)
-rather than
-[being caught up by (hyped?) experimental frontiers](https://overreacted.io/algebraic-effects-for-the-rest-of-us/)?
-Maybe that's why the react team only really want libraries to adopt it?
-Best to hide the magic behind a library call so we don't have to look at it?
-
-Either way - it's here to stay and they do mention the possibility of introducing more primitives to lubricate it's use in the future, so maybe one day all of this will be ours.
+For me this feels like a bad sign.
+We're at the mercy of the opinions and target solutions the frameworks and libraries are aimed at, and how they've integrated suspense.
+Fine, but that doesn't work in all cases.
+Does this mean React is no longer a good choice for this kind of application?
+And that we should be looking elsewhere in the web ecosystem?
+Maybe I just need to look deeper into the ecosystem a bit more or it needs to catchup a bit.
+I'm not sure, but it's a thing to think about.
