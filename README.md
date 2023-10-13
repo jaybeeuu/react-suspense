@@ -8,7 +8,7 @@ I had two questions i wanted to answer:
 2. What does the new transition API do?
 
 The app is a simple page that let's you load an image from your local machine. It displays the image in a canvas,
-and uses one of the prebuild TensorflowJS models
+and uses one of the pre-trained TensorflowJS models
 ([mobilenet](https://github.com/tensorflow/tfjs-models/tree/master/mobilenet))
 to classify the image in your browser.
 
