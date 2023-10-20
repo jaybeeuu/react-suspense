@@ -12,6 +12,7 @@
     "type-check": "tsc"
   },
   "dependencies": {
+    "@jaybeeuu/reading-time-cli": "^1.0.0",
     "@jaybeeuu/utilities": "^2.0.1",
     "@tensorflow-models/mobilenet": "^2.1.1",
     "@tensorflow/tfjs-backend-webgl": "^4.10.0",

@@ -347,29 +347,35 @@ It means you can't just manage the promises directly in the components that cons
 That's a hard problem to solve in a roll-your-own solution, which might be why the React team have recommended that we use `Suspense` for libraries and haven't publicised the "suspend" end of the API yet.
 
 You can (although it's not quite what I settled on) manage the promise in any component between `Suspense` and the component that suspends; that works fine.
-Or you can pass the promises down from the top levels, as I've done(contexts would make this easier in a larger app).
+Or you can pass the promises down from the top levels, as I've done (contexts would make this easier in a larger app).
 It's only the component that suspended that gets started from scratch.
 
 However... I also noticed some weirdness when I was debugging my app.
-That Error I showed is generated when a module label boolean flag is false. The first time you request the classifications, it errors, then sets the flag true, and works from then on.
+That Error I showed is generated when a module label boolean flag is false.
+The first time you request the classifications, it errors, then sets the flag true, and works from then on.
 Weirdly though I wasn't seeing the error at all.
 When I dug into it, it turns out that [StrictMode](https://react.dev/reference/react/StrictMode),
 was the problem.
-Because my effects weren't idempotent (running them more than once has no impact on how they function), I was getting strange results.
+Because my effects weren't idempotent (if they were, running them more than once would have no impact on the effect they have), I was getting strange results.
 Strict mode means that all effects get a sort of "warm up" cycle during mount, to help you shake out bugs which can show up in concurrent rendering scenarios.
 It's really important to have it on, if you are.
 
 I think this kills the pass promises down business and means you need to write a separate, stateful, service, which manages the life cycle of the promises...
 
 In trying to solve that problem mentally I think I'm converging on something like
-[`React-query`](https://tanstack.com/query/latest)
+[`react-query`](https://tanstack.com/query/latest)
 that I mentioned earlier.
-It looks like it _might_ solve these problems, allowing you to create a "query" with an arbitrary async function, and call it within your component and it does have an experimental
-["suspense mode"](https://tanstack.com/query/latest/docs/react/community/suspensive-react-query).
+It is aimed to solve these problems, allowing you to create a "query" with an arbitrary async function, and call it within your component,
+and while I've been writing this post, v5 of React-query has been announced, which includes
+[1st class suspense support](https://tanstack.com/blog/announcing-tanstack-query-v5#1st-class-suspense-support).
 So long as your "key" is stable, it will take care of caching and GC if the query get's abandoned.
-Further experimentation is needed perhaps.
+On my read of the docs though, this library is opinionated in a lot of things,
+and in my experience of using the library it was hard to bend it to my use-case.
+I'm suspicious... further experimentation is needed perhaps.
 
-Still - with some compromise, effort, an import or combinations thereof, we have some way to simply integrate asynchronous operations in to React applications, and it leaves the application code completely unaware of the asynchrony, and devoid of logic handling it. So that's nice.
+Still - with some compromise, effort, avoidance of bear traps, an import or combinations thereof,
+we have some way to simply integrate asynchronous operations in to React applications, and it leaves the application code completely unaware of the asynchrony, and devoid of logic handling it.
+So that's nice.
 
 ## The Next Step
 
