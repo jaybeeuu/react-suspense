@@ -30,7 +30,7 @@ I've used a sprinkling of TypeScript where it helps, and the example application
 Before I get into the weeds of what suspense is and how to use it, Let's talk about the problem it's trying to solve - that is how do you handle promises in a React application?
 
 It feels like there should be an easy answer to that, the web is asynchronous after all.
-But if you stop to think, the async work you've done with a React application has probably involved some kind of framework, for example redux-thunk or react-query, and the net result of that code, is _avoiding_ asynchrony in the components themselves.
+But if you stop to think, the async work you've done with a React application has probably involved some kind of framework, for example redux-thunk, react-query, rtk query or swr, and the net result of that code, is _avoiding_ asynchrony in the components themselves.
 
 React components don't really like asynchrony and they don't play well with promises.
 For example, you can't `await` inside a component, or, directly, inside hooks like `useEffect`.
@@ -460,7 +460,7 @@ However, I'm left wondering if the team haven't gone a bit too far
 [down the rabbit hole here](https://overReacted.io/algebraic-effects-for-the-rest-of-us/),
 and done something that was a bit too clever for it's own good.
 Sometimes, if it's hard to use, it's because you're doing it wrong.
-While I'm not averse to using a library where it makes sense, but async data fetches are something every app does at some point, and handling them feels like something React should make easy out of the box.
+While I'm not averse to using a library where it makes sense, async data fetches are something every app does at some point, and handling them feels like something React should make easy out of the box.
 To me at least, suspense doesn't seem like it's done that.
 
 This feels like a bad sign.
