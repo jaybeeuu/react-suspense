@@ -1,4 +1,4 @@
-import type { DependencyList} from "react";
+import type { DependencyList } from "react";
 import { useRef } from "react";
 
 const noValue = Symbol.for("no-value");
@@ -19,57 +19,61 @@ export const useSemanticMemo = <Value>(factory: () => Value, dependencies: Depen
   return previousValueRef.current;
 };
 
-export interface PromisedValueGetter<Value> {
-  (): Value;
-  promise: Promise<Value>;
-}
-
-export interface PendingPromise<Value> extends PromiseLike<Value> {
+export interface Pending {
   status: "pending";
 }
 
-export interface FulfilledPromise<Value> extends PromiseLike<Value> {
+const pending: Pending = { status: "pending" };
+
+export interface Fulfilled<Value> {
   status: "fulfilled";
   value: Value;
 }
 
-export interface RejectedPromise<Value> extends PromiseLike<Value> {
+export interface Rejected {
   status: "rejected";
   error: unknown;
 }
 
-export type ObservedPromise<Value> = PendingPromise<Value> | FulfilledPromise<Value> | RejectedPromise<Value>;
+export type PromiseState<Value> = Pending | Fulfilled<Value> | Rejected;
 
-const isObservedPromise = <Value>(promise: PromiseLike<Value>): promise is ObservedPromise<Value> => {
-  return "status" in promise;
-};
+const promiseStateMap = new WeakMap<PromiseLike<any>, PromiseState<any>>();
 
-const observePromise = <Value>(promise: PromiseLike<Value>): ObservedPromise<Value> => {
-  if (isObservedPromise(promise)) {
-    return promise;
+const observePromise = <Value>(promise: PromiseLike<Value>): void => {
+  if (promiseStateMap.has(promise)) {
+    return;
   }
 
-  const observedPromise: ObservedPromise<Value> = Object.assign(promise, { status: "pending" as  const });
+  promiseStateMap.set(promise, pending);
 
   void (async () => {
     try {
       const value = await promise;
-      void Object.assign(observedPromise, { status: "fulfilled" as const, value });
+      promiseStateMap.set(promise, { status: "fulfilled", value });
     } catch (error) {
-      void Object.assign(observedPromise, { status: "rejected" as const, error });
+      promiseStateMap.set(promise, { status: "rejected", error });
     }
   })();
-
-  return observedPromise;
 };
 
 export const usePromise = <Value>(promise: Promise<Value>): Value => {
-  const observedPromise = observePromise(promise);
+  observePromise(promise);
+  const promiseState: PromiseState<Value> = promiseStateMap.get(promise) ?? pending;
 
-  switch (observedPromise.status) {
+  switch (promiseState.status) {
     // eslint-disable-next-line @typescript-eslint/no-throw-literal
-    case "pending": throw observedPromise;
-    case "fulfilled": return observedPromise.value;
-    case "rejected": throw observedPromise.error;
+    case "pending": throw promise;
+    case "fulfilled": return promiseState.value;
+    case "rejected": throw promiseState.error;
   }
+};
+
+export const useAsyncOperation = <Result>(
+  operation: (params: { abortSignal: AbortSignal }) => Promise<Result>,
+  dependencies: DependencyList,
+  options: { timeout: number; cacheLength: number; }
+): Result => {
+  const promise = operation({ abortSignal: new AbortController().signal });
+
+  return usePromise(promise);
 };
